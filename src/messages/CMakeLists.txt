@@ -23,4 +23,12 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
+find_package(rosidl_default_generators REQUIRED)
+rosidl_generate_interfaces(messages
+  "msg/PathMsg.msg"
+  "msg/InfoMsg.msg"
+  "msg/BranchMsg.msg"
+)
+
+
 ament_package()
