@@ -1,2 +1,2 @@
-int32 x
-int32 y
+int16 x
+int16 y

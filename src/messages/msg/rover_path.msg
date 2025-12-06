@@ -1,2 +1,2 @@
-int32 roverID
+int16 roverID
 messages/Coord[] path
