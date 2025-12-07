@@ -3,7 +3,7 @@ from rclpy.node import Node
 from messages.msg import Coord 
 from messages.msg import rover_path
 from messages.msg import rover_coord
-from messages.msg import rover_list
+from messages.srv import rover_list
 class UpdateNode(Node):
     def __init__(self):
         super().__init__('Update_node')
