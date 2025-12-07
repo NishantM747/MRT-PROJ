@@ -28,6 +28,7 @@ rosidl_generate_interfaces(messages
   "msg/PathMsg.msg"
   "msg/InfoMsg.msg"
   "msg/BranchMsg.msg"
+  "srv/MoveMembers.srv"
 )
 
 
