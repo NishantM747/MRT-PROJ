@@ -79,7 +79,7 @@ class bot(Node):
         self.coord = coord  
 
         # If not leader → done
-        if not hasattr(self, "is_leader") or not self.is_leader:
+        if not self.is_leader:
             return  
 
         # ----- LEADER logic -----

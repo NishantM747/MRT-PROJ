@@ -251,10 +251,10 @@ class branch:  #pure python class. This will handle the branch and its function.
 def main(args=None):
     rclpy.init(args=args)
     
-    bot1=bot((0,0),1)
-    bot2=bot((0,0),2)
-    bot3=bot((0,0),3)
-    bot4=bot((0,0),4)
+    bot1=bot(coord=(0,0),id=1)
+    bot2=bot(coord=(0,0),id=2)
+    bot3=bot(coord=(0,0),id=3)
+    bot4=bot(coord=(0,0),id=4)
     branch1=branch(leader=bot1,members=[bot2])
     branch2=branch(leader=bot3,members=[bot4])
     print(branch1.id,branch2.id)
