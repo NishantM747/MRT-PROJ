@@ -30,6 +30,7 @@ rosidl_generate_interfaces(messages
   "msg/BranchMsg.msg"
   "srv/MoveMembers.srv"
   "srv/LeaderMove.srv"
+  "msg/TaskInfo.msg"
   
 )
 

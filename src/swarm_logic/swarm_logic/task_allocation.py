@@ -5,14 +5,11 @@ import math
 from messages.msg import TaskInfo
 
 class Task:
-    global tasks
-    task={}
     def __init__(self, id, x, y):
         self.id = id
         self.x = x
         self.y = y
-        self.tasks[self.id]=self
-        tasks[self.id]=self
+        
 class RobotProxy:
     def __init__(self, id, x, y):
         self.id = id
