@@ -29,6 +29,8 @@ rosidl_generate_interfaces(messages
   "msg/InfoMsg.msg"
   "msg/BranchMsg.msg"
   "srv/MoveMembers.srv"
+  "srv/LeaderMove.srv"
+  
 )
 
 
