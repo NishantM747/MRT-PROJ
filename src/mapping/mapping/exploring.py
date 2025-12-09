@@ -175,7 +175,8 @@ def main():
     swarm.update_data()
     swarm.get_logger().info(f"Shelves: {swarm.map.shelves}")
     swarm.loadmap()
-    swarm.sendbotinfo 
+    swarm.send_bot_info()
+    swarm.send_shelves()
     plt.draw()
     plt.pause(1000000000)
 
