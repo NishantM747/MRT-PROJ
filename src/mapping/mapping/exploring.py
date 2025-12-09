@@ -24,6 +24,8 @@ class Swarm(Node):
             self.bots.append(new_bot)
         self.pastchosen_Frontiers = set()
         self.frontiercosts = [{} for _ in range(bot_count)]
+        self.sendbotinfo = self.create_publisher(Map,'bot_info',10)
+        self.sendshelves = self.create_publisher(Map,'shelf_info',10)
     def loadmap(self):
         plt.clf()
         plt.imshow(self.data, vmin = 0, vmax = 4)
@@ -32,6 +34,20 @@ class Swarm(Node):
         plt.colorbar()                       
         plt.draw() 
         plt.pause(0.000001)
+    def send_bot_info(self):
+        for i in range(self.bot_count):
+            msg = Map()
+            msg.x = self.bots[i].coord[0]
+            msg.y = self.bots[i].coord[1]
+            msg.status = self.bots[i].id
+            self.sendbotinfo.publish(msg)
+    def send_shelves(self):
+        for label, coord in self.map.shelves.items():
+            msg = Map()
+            msg.x = coord[0]
+            msg.y = coord[1]
+            msg.status = label
+            self.sendshelves.publish(msg)
     def update_data(self):
         for (x,y), value in self.map.grid.items():
             self.data[x][y] = value
@@ -117,7 +133,7 @@ class Swarm(Node):
 
 def main():
     rclpy.init(args=None)
-    swarm = Swarm(10)
+    swarm = Swarm(5)
     swarm.see()
     swarm.map.update_frontiers(0)
 
@@ -159,8 +175,10 @@ def main():
     swarm.update_data()
     swarm.get_logger().info(f"Shelves: {swarm.map.shelves}")
     swarm.loadmap()
+    swarm.sendbotinfo 
     plt.draw()
-    plt.pause(5)
+    plt.pause(1000000000)
+
     plt.close()
     
 
