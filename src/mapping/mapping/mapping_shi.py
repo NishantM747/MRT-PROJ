@@ -15,7 +15,6 @@ class GeneratedMap: #generated  by bots, shared by all of them
 
 
 
-
     def get(self,x, y):
         if (x, y) in self.grid:
             return self.grid[(x, y)]
