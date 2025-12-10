@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt      # Imports matplotlib for plotting
 import numpy as np                   # Imports numpy to create/load numeric data
 from path_planning.path import pathplanning
 from messages.msg import BotMove 
+import time
                       
 class Swarm(Node):
 
@@ -38,10 +39,24 @@ class Swarm(Node):
         plt.draw() 
         plt.pause(0.000001)
     def updatetasks(self,msg):
-        i = msg.bot_id
-        x = msg.final_x
-        y = msg.final_y
-        self.bots[i].path = self.pathplanner.nav(self.bots[i].coord,(x,y))
+        self.get_logger().info(f"got movement request for {msg.bot_id}:{msg.type}")
+        if msg.type=="update":
+            i = msg.bot_id
+            x2 = msg.final_x
+            y2 = msg.final_y
+            x1 = msg.init_x
+            y1 = msg.init_y
+            self.bots[i].path = self.pathplanner.nav(self.bots[i].coord,(x1,y1))
+            self.get_logger().info(f"moved to pickup bot {i}")
+            time.sleep(4.0)
+            self.get_logger().info(f"moving to drop off bot {i}")
+            self.bots[i].path = self.pathplanner.nav(self.bots[i].coord,(x2,y2))
+        else:
+            i = msg.bot_id
+            x2 = msg.final_x
+            y2 = msg.final_y
+            self.bots[i].path = self.pathplanner.nav(self.bots[i].coord,(x2,y2))
+            
     def send_bot_info(self):
         for i in range(self.bot_count):
             msg = Map()
