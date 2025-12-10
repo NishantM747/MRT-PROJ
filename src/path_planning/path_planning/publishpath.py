@@ -17,9 +17,11 @@ class publishpath(Node):
         self.path_publisher_ = self.create_publisher(Roverpath, 'path_info', 10)
 
 
-        self.start = None
-        self.end = None
+        self.current = None
+        self.pick = None
+        self.place = None
         self.id = None
+        self.task_id = None
 
     def task_callback(self, msg):
 
@@ -27,8 +29,8 @@ class publishpath(Node):
         self.pick = (msg.pick_x, msg.pick_y) 
         self.place = (msg.place_x, msg.place_y) 
         self.id = msg.bot_id
-
         self.taskid = msg.task_id
+        
         self.publish_path()  # Directly call publish_path after receiving new coordinates
 
     def map_callback(self, msg):
