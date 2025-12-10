@@ -3,7 +3,7 @@ from rclpy.node import Node
 from messages.msg import BranchMsg
 from messages.msg import InfoMsg
 from messages.srv import MoveMembers
-from .bot import Bot
+from .bot import bot
 import random
 from messages.msg import PathMsg
 import time

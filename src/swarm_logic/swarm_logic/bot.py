@@ -38,6 +38,9 @@ class bot(Node):
         msg.y = y
         msg.status = status
         self.send_map.publish(msg)
+        self.get_logger().info(f"Sent map info for {x},{y} with status {status}")
+        #get the number of subscribers to the send_map topic
+        self.get_logger().info(f"Number of subscribers to send_map topic: {self.send_map.get_subscription_count()}")    
 
     def see(self):
         cx, cy = self.coord 

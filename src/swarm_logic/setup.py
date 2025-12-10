@@ -27,7 +27,9 @@ setup(
             "branch_node=swarm_logic.branch:main",
             "bot_node=swarm_logic.bot:main",
             "execution_node=swarm_logic.execution:main",
-            "visual_node=swarm_logic.visuals:main"
+            "visual_node=swarm_logic.visuals:main",
+            "task_gui_node=swarm_logic.task_gui:main",
+            "task_allocation_node=swarm_logic.task_allocation:main"
         ],
     },
 )

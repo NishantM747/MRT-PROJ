@@ -23,6 +23,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Roverpath.msg"
   "msg/Rovercoord.msg"
   "msg/Coord.msg"
+  "msg/TaskInfoPath.msg"
+  "msg/BotMove.msg"
 )
 # uncomment the following section in order to fill in
 # further dependencies manually.
