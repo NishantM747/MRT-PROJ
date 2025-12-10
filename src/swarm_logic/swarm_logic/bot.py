@@ -15,7 +15,8 @@ class bot(Node):
         self.coord=coord
         self.color=color
         self.returning=returning
-        self.path=[]
+        self.path1=[]
+        self.path2=[]
         self.follow_leader=None    #initially following none
         self.LOS=3  #line of sight
         self.get_map = self.create_client(Mapinfo, 'map_info')
@@ -40,9 +41,6 @@ class bot(Node):
         msg.y = y
         msg.status = status
         self.send_map.publish(msg)
-        self.get_logger().info(f"Sent map info for {x},{y} with status {status}")
-        #get the number of subscribers to the send_map topic
-        self.get_logger().info(f"Number of subscribers to send_map topic: {self.send_map.get_subscription_count()}")  
         self.parent.sentmap.append((x,y))  
 
     def see(self):

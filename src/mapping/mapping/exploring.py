@@ -46,16 +46,13 @@ class Swarm(Node):
             y2 = msg.final_y
             x1 = msg.init_x
             y1 = msg.init_y
-            self.bots[i].path = self.pathplanner.nav(self.bots[i].coord,(x1,y1))
-            self.get_logger().info(f"moved to pickup bot {i}")
-            time.sleep(4.0)
-            self.get_logger().info(f"moving to drop off bot {i}")
-            self.bots[i].path = self.pathplanner.nav(self.bots[i].coord,(x2,y2))
+            self.bots[i].path1 = self.pathplanner.nav(self.bots[i].coord,(x1,y1))
+            self.bots[i].path2 = self.pathplanner.nav((x1,y1),(x2,y2))
         else:
             i = msg.bot_id
             x2 = msg.final_x
             y2 = msg.final_y
-            self.bots[i].path = self.pathplanner.nav(self.bots[i].coord,(x2,y2))
+            self.bots[i].path1 = self.pathplanner.nav(self.bots[i].coord,(x2,y2))
             
     def send_bot_info(self):
         for i in range(self.bot_count):
@@ -114,8 +111,6 @@ class Swarm(Node):
 
     
     def chooseFrontier(self,i): #if leader
-        self.get_logger().info(f"Bot {i} choosing frontier")
-        self.get_logger().info(f"Current frontiers: {self.map.Frontier.keys()}")
         if not self.map.Frontier:
             return self.bots[i].coord
         def return_coord(best_coord):
@@ -125,7 +120,6 @@ class Swarm(Node):
                 return best_coord
             self.pastchosen_Frontiers.add(best_coord)
             del self.frontiercosts[i][best_coord]
-            self.get_logger().info(f"Bot {i} chose frontier {best_coord}")
             return best_coord
         inf = 10**18
         mincost = (-1,-1,inf)
@@ -162,7 +156,7 @@ class Swarm(Node):
 
 def main():
     rclpy.init(args=None)
-    swarm = Swarm(5)
+    swarm = Swarm(10)
     swarm.see()
     swarm.map.update_frontiers(0)
 
@@ -209,10 +203,13 @@ def main():
     while True:
         rclpy.spin_once(swarm,timeout_sec = 0.1)
         for i in range(swarm.bot_count):
-            if swarm.bots[i].path:
-                next_step = swarm.bots[i].path.pop(0)
+            if swarm.bots[i].path1:
+                next_step = swarm.bots[i].path1.pop(0)
                 swarm.bots[i].justmove(next_step)
-                if not swarm.bots[i].path:
+            elif swarm.bots[i].path2:
+                next_step = swarm.bots[i].path2.pop(0)
+                swarm.bots[i].justmove(next_step)
+                if not swarm.bots[i].path2:
                     msg = Map()
                     msg.status = swarm.bots[1].id
                     msg.x = swarm.bots[i].coord[0]
