@@ -13,7 +13,7 @@ class UpdateNode(Node):
         self.pointers = {}
         self.subscription = self.create_subscription(
             RoverPath,
-            'path',
+            'path_info',
             self.listener_callback,
             10
         )
@@ -54,10 +54,13 @@ class UpdateNode(Node):
             up = RoverAvail()
             rid = request.request[i].roverid
             avail = request.request[i].avail
+            tid = request.request[i].task_id
             if rid in self.pointers:
                 avail = False
+                tid = self.rover_paths[rid].task_id
             up.roverid = rid
             up.avail = avail
+            up.task_id = tid
             response.response.append(up)
         return response
 def main(args=None):
