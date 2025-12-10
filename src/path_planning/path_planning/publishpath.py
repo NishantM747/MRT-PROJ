@@ -43,6 +43,7 @@ class publishpath(Node):
         path = path1 + path2[1:]  # Combine paths, avoiding duplicate pick point
         self.get_logger().info(f"Publishing path for rover {self.id}: {path}")
         msg.roverid = self.id
+        msg.task_id = self.taskid
         msg.path = [Coord(x=coord[0], y=coord[1]) for coord in path]  # Convert tuples to Coord objects
         self.path_publisher_.publish(msg)
 
