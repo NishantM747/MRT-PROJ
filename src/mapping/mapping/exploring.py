@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt      # Imports matplotlib for plotting
 import numpy as np                   # Imports numpy to create/load numeric data
 from path_planning.path import pathplanning
 from messages.msg import BotMove 
-import time
                       
 class Swarm(Node):
 
@@ -186,7 +185,7 @@ def main():
         swarm.loadmap()
     for i in range(swarm.bot_count):
         if paths[i]:
-            while paths[100]:
+            while paths[i]:
                 next_step = paths[i].pop(0)
                 swarm.bots[i].move(next_step)
                 for x in range(swarm.bot_count):

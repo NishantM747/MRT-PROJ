@@ -107,41 +107,5 @@ class pathplanning(Node):
                 iterations += 1
         return []  # No path found
         
-        
-    def van(self,coord1:tuple,coord2:tuple,i:int):
-        paths = [[coord1]]
-        found = False
-        path = []
-        new_paths = []
-        visited = [coord1]
-        while (not found) and paths:
-            for p in paths:
-                neigh = self.get_neighbors(p[-1])
-                for n,v in neigh.items():
-                    if v != 0:
-                        continue 
-                    repeat = False
-                    for x in visited:
-                        if x[0] == n[0] and x[1] == n[1]:
-                            repeat = True
-                    if repeat:
-                        continue
-                    new_path = p + [n]
-                    visited.append(n)
-                    new_paths.append(new_path)
-                    if n[0] == coord2[0] and n[1] == coord2[1]:
-                        found = True
-                        path = new_path
-                        break
-                if found:
-                    break
-            if found:
-                break
-            paths = new_paths
-            if len(paths[0])>=i:
-                return []
-            new_paths = []
-        self.get_logger().info(f"Path found between {coord1} and {coord2}: {path}")
-        return path
 
 
