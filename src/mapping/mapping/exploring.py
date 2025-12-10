@@ -214,10 +214,6 @@ def main():
                     msg.x = swarm.bots[i].coord[0]
                     msg.y = swarm.bots[i].coord[1]
                     swarm.sendbotinfo.publish(msg)
-    plt.draw()
-    plt.pause(1000000000)
-
-    plt.close()
     
 
 if __name__ == '__main__':
