@@ -1,3 +1,4 @@
+
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
@@ -13,12 +14,13 @@ from .bot import bot
 
 
 class Task:
-    def __init__(self, id, x, y, drop_x, drop_y):
+    def __init__(self, id, x, y, drop_x, drop_y, item_qty=1):
         self.id = id
         self.x = x
         self.y = y
         self.drop_x = drop_x
         self.drop_y = drop_y
+        self.item_qty = item_qty  # Number of items in this task
 
 
 class RobotProxy:
@@ -34,7 +36,7 @@ class RobotProxy:
 
 
 class BotProxy:
-    
+   
     def __init__(self, id, priority, coord, color="white", returning=False):
         self.id = id
         self.priority = priority
@@ -43,21 +45,41 @@ class BotProxy:
         self.returning = returning
         self.branch_id = None
         self.follow_leader = None
+        
+        # Task assignment tracking
+        self.current_items = 0      # 0-3 items carrying (0 = free, >0 = busy)
+        self.current_task = None    # Current task object
+        self.is_leader = False      # Leader flag
+        self.members = []           # List of member BotProxy (only for leaders)
+        self.region_id = None       # Region this bot belongs to
+    
+    def is_free(self):
+        return self.current_items == 0
+    
+    def assign_items(self, count, task):
+       
+        self.current_items = min(3, count)
+        self.current_task = task
+    
+    def complete_task(self):
+        
+        self.current_items = 0
+        self.current_task = None
     
     def set_leader(self):
         self.color = "blue"
+        self.is_leader = True
     
     def set_follower(self):
         self.color = "green"
+        self.is_leader = False
     
     def set_returning(self):
         self.returning = True
         self.color = "red"
     
     def move(self, coord: tuple):
-        """Move bot to new coordinate. Updates coord attribute."""
-        # NOTE: In actual implementation with real bot class, this would call bot.move()
-        # which also triggers see() and updates the map. For now, just update coord.
+        
         self.coord = coord
 
 
@@ -87,9 +109,11 @@ class TaskAllocator(Node):
         self.create_subscription(TaskInfo, 'new_tasks', self.task_callback, 10)
         self.create_subscription(Map, 'shelf_info', self.shelf_callback, 10)
         self.create_subscription(Map, 'bot_info', self.bot_callback, 10)
-        self.create_subscription(Map, 'send_map', self.map_callback, 10)
-        self.task_pub_to_path=self.create_publisher(TaskInfoPath, 'task_info_path', 10)
-        
+        # Enabled with larger queue to store map data
+        self.create_subscription(Map, 'send_map', self.map_callback, 4000)
+        # self.task_pub_to_path=self.create_publisher(TaskInfoPath, 'task_info_path', 10)
+
+        self.task_pub_to_path=self.create_publisher(BotMove, 'bot_move', 10)
         # Publisher for bot movement during region segregation
         self.bot_move_pub = self.create_publisher(BotMove, 'bot_move', 10)
         
@@ -98,7 +122,7 @@ class TaskAllocator(Node):
    
     
     def shelf_callback(self, msg: Map):
-        """Handle shelf info - creates item with drop-off location."""
+        
         x = msg.x
         y = msg.y
         item_id = msg.status
@@ -109,24 +133,32 @@ class TaskAllocator(Node):
     
     
     def bot_callback(self, msg: Map):
-        """Handle bot registration. When (0,0,0) received, all bots are registered."""
+       
         x = msg.x
         y = msg.y
-        bot_id = msg.status  # Using status field for bot_id based on original code
+        bot_id = msg.status  # Using status field for bot_id
         
-        if msg.x == 0 and msg.y == 0 and msg.status == 0:
+        # Termination signal: x=0, y=0, status=0 (sent AFTER all bot info)
+        # This only works if no bot is at position (0,0) - which is typically an edge
+        if x == 0 and y == 0 and bot_id == 0:
             # All bots have been sent - trigger branch creation
             self.get_logger().info("All bots have been registered!")
             self.get_logger().info(f"Total bots: {len(self.bot_dict)}")
             self.create_branches_from_bots()
         else:
-            self.bot_dict[bot_id] = (x, y)
-            self.get_logger().info(f"Bot {bot_id} registered at ({x}, {y})")
+            # Only register if not already registered (avoid duplicates from multiple calls)
+            if bot_id not in self.bot_dict:
+                self.bot_dict[bot_id] = (x, y)
+                self.get_logger().info(f"Bot {bot_id} registered at ({x}, {y}) [NEW]")
+            else:
+                # Update position if already exists
+                self.bot_dict[bot_id] = (x, y)
+                self.get_logger().debug(f"Bot {bot_id} position updated to ({x}, {y})")
 
    
     
     def map_callback(self, msg: Map):
-        """Handle map data - updates location validity."""
+       
         x = msg.x
         y = msg.y
         status = msg.status
@@ -134,7 +166,7 @@ class TaskAllocator(Node):
         self.get_logger().debug(f"Map update: ({x}, {y}) = {status}")
 
     def is_location_free(self, x: int, y: int) -> bool:
-        """Check if a location is free (status 0 = free)."""
+       
         key = (int(x), int(y))
         if key in self.map_dict:
             return self.map_dict[key] == 0
@@ -142,7 +174,7 @@ class TaskAllocator(Node):
         return True
 
     def find_free_location_near(self, target_x: int, target_y: int) -> tuple:
-        """Find a free location near the target. Returns target if free, else searches nearby."""
+       
         if self.is_location_free(target_x, target_y):
             return (target_x, target_y)
         
@@ -159,7 +191,7 @@ class TaskAllocator(Node):
         return (target_x, target_y)
 
     def _publish_bot_move(self, bot_id: int, init_pos: tuple, final_pos: tuple):
-        """Publish bot movement message for visualization."""
+      
         msg = BotMove()
         msg.bot_id = bot_id
         msg.init_x = int(init_pos[0])
@@ -171,12 +203,7 @@ class TaskAllocator(Node):
 
     
     def create_branches_from_bots(self):
-        """
-        Create branches from registered bots.
-        - Number of branches = half the number of bots
-        - Each branch has 1 leader + remaining members divided equally
-        - Bots are moved to their assigned regions
-        """
+        
         num_bots = len(self.bot_dict)
         if num_bots < 2:
             self.get_logger().warn("Not enough bots to create branches (need at least 2)")
@@ -207,6 +234,9 @@ class TaskAllocator(Node):
         bot_list = [self.bot_objects[bid] for bid in bot_ids]
         bot_index = 0
         
+        self.get_logger().info(f"Bot IDs to assign: {bot_ids}")
+        self.get_logger().info(f"Bots per branch: {bots_per_branch}, Remaining: {remaining_bots}")
+        
         for branch_idx in range(num_branches):
             # Determine number of bots for this branch
             branch_size = bots_per_branch
@@ -218,6 +248,8 @@ class TaskAllocator(Node):
             members = bot_list[bot_index + 1 : bot_index + branch_size]
             bot_index += branch_size
             
+            self.get_logger().info(f"Branch {branch_idx}: Leader={leader.id}, Members={[m.id for m in members]}, Size={branch_size}")
+            
             # Get region center for this branch
             region_center = region_centers[branch_idx]
             
@@ -227,6 +259,9 @@ class TaskAllocator(Node):
             # Store initial position and move leader to region center
             leader_init = self.bot_dict[leader.id]
             leader.coord = leader_coord
+            leader.set_leader()  # Mark as leader
+            leader.region_id = branch_idx  # Track region
+            leader.members = members  # Store members list in leader
             self.get_logger().info(f"Branch {branch_idx + 1}: Leader Bot {leader.id} moved to {leader_coord}")
             
             # Publish leader movement
@@ -234,6 +269,9 @@ class TaskAllocator(Node):
             
             # Move members near leader (not too close)
             for i, member in enumerate(members):
+                member.set_follower()  # Mark as follower
+                member.region_id = branch_idx  # Track region
+                
                 # Offset members - spread them out in the region (not close to leader)
                 offset_x = ((i % 3) - 1) * 3  # -3, 0, 3
                 offset_y = ((i // 3) - 1) * 3
@@ -276,10 +314,7 @@ class TaskAllocator(Node):
         self.register_leaders_from_exploration(self.active_branches)
 
     def _calculate_region_centers(self, num_branches: int) -> list:
-        """
-        Calculate region centers based on number of branches.
-        Divides the map into equal regions and returns center of each.
-        """
+        
         centers = []
         
         if num_branches == 1:
@@ -314,23 +349,24 @@ class TaskAllocator(Node):
         return centers
     
     def register_leaders_from_exploration(self, active_branches):
-        """Register leaders from active branches for task allocation."""
+      
         self.get_logger().info("Registering leaders from branches...")
 
         for branch_id, branch_obj in active_branches.items():
-            leader_bot = branch_obj.leader
+            leader_bot = branch_obj.leader  # This is already a BotProxy
+            
+            region_id = self.get_region_id(leader_bot.coord[0], leader_bot.coord[1])
+            leader_bot.region_id = region_id
 
-            proxy = RobotProxy(leader_bot.id, leader_bot.coord[0], leader_bot.coord[1])
-            region_id = self.get_region_id(proxy.x, proxy.y)
+            # Store leader directly (BotProxy already has members list)
+            self.region_leaders[region_id] = leader_bot
+            self.all_leaders.append(leader_bot)
 
-            self.region_leaders[region_id] = proxy
-            self.all_leaders.append(proxy)
-
-            topic_name = f'/bot_{proxy.id}/assign_task'
+            topic_name = f'/bot_{leader_bot.id}/assign_task'
             pub = self.create_publisher(TaskInfo, topic_name, 10)
-            self.task_publishers[proxy.id] = pub
+            self.task_publishers[leader_bot.id] = pub
 
-            self.get_logger().info(f"Leader {proxy.id} assigned to Region {region_id}")
+            self.get_logger().info(f"Leader {leader_bot.id} assigned to Region {region_id} | Members: {[m.id for m in leader_bot.members]}")
         
         self.get_logger().info(f"Registration complete. {len(self.all_leaders)} leaders ready.")
 
@@ -340,63 +376,139 @@ class TaskAllocator(Node):
         row = int(y // self.region_size)
         return row * self.cols + col
 
-    def assign_best_robot(self, task):
-        region_id = self.get_region_id(task.x, task.y)
-        local_leader = self.region_leaders.get(region_id)
-
-        target_robot = None
-
-        if local_leader and not local_leader.is_overloaded():
-            target_robot = local_leader
-            self.get_logger().info(f"Task {task.id}: Assigned locally to bot {target_robot.id}")
-
-        else:
-            self.get_logger().info(f"Task {task.id}: Local leader busy/missing. Searching neighbors")
-            target_robot = self.find_nearest_available_neighbor(task.x, task.y)
-
-        if target_robot:
-            target_robot.task_queue.append(task)
-            self.send_command_to_bot(target_robot.id, task)
-            return True
-        else:
-            self.get_logger().warn(f"Task {task.id}: CRITICAL - All bots overloaded.")
-            return False
-
-    def find_nearest_available_neighbor(self, tx, ty):
-        best_bot = None
+    def find_nearest_leader(self, x, y):
+       
+        if not self.all_leaders:
+            return None
+        
+        best_leader = None
         min_dist = float('inf')
+        
+        for leader in self.all_leaders:
+            # Calculate distance from pickup to leader's position
+            dist = math.sqrt((leader.coord[0] - x)**2 + (leader.coord[1] - y)**2)
+            if dist < min_dist:
+                min_dist = dist
+                best_leader = leader
+        
+        return best_leader
 
-        for bot in self.all_leaders:
-            if not bot.is_overloaded():
-                dist = math.sqrt((bot.x - tx)**2 + (bot.y - ty)**2)
-                if dist < min_dist:
-                    min_dist = dist
-                    best_bot = bot
-        return best_bot
+    def find_free_member(self, leader):
+    
+        if leader is None:
+            return None
+        
+        for member in leader.members:
+            if member.is_free():
+                return member
+        return None
 
-    def send_command_to_bot(self, bot_id, task):
-        # if bot_id in self.task_publishers:
-        #     msg = TaskInfo()
-        #     msg.id = task.id
-        #     msg.x = float(task.x)
-        #     msg.y = float(task.y)
-        #     msg.x_drop = float(task.drop_x)
-        #     msg.y_drop = float(task.drop_y)
-        #     self.task_publishers[bot_id].publish(msg)
-        msg=TaskInfoPath()
-        msg.bot_id=bot_id
-        msg.task_id=task.id
-        msg.pick_x=task.x
-        msg.pick_y=task.y
-        msg.place_x=task.drop_x
-        msg.place_y=task.drop_y
-        msg.bot_x=self.bot_dict[bot_id][0]
-        msg.bot_y=self.bot_dict[bot_id][1]
-        self.task_pub_to_path.publish(msg)
+    def find_other_leader_with_free_member(self, exclude_leader):
+        """Find another leader (not the excluded one) that has free members."""
+        for leader in self.all_leaders:
+            if leader != exclude_leader:
+                if self.find_free_member(leader) is not None:
+                    return leader
+        return None
+
+    def assign_task(self, task):
+       
+        remaining_items = task.item_qty
+        
+        # Find nearest leader to pickup location
+        current_leader = self.find_nearest_leader(task.x, task.y)
+        
+        if current_leader is None:
+            self.get_logger().warn(f"Task {task.id}: No leaders registered!")
+            return False
+        
+        self.get_logger().info(f"Task {task.id}: Pickup at ({task.x}, {task.y}) -> Nearest Leader {current_leader.id} | Members: {[m.id for m in current_leader.members]}")
+        
+        bots_assigned = 0
+        
+        while remaining_items > 0:
+            # Find a free member
+            member = self.find_free_member(current_leader)
+            
+            if member is None:
+                # Try other leader's members
+                other_leader = self.find_other_leader_with_free_member(current_leader)
+                if other_leader is None:
+                    self.get_logger().warn(f"Task {task.id}: No free bots available! {remaining_items} items unassigned.")
+                    break
+                current_leader = other_leader
+                member = self.find_free_member(current_leader)
+                if member is None:
+                    self.get_logger().warn(f"Task {task.id}: No free bots available! {remaining_items} items unassigned.")
+                    break
+            
+            # Assign up to 3 items to this member
+            items_to_assign = min(3, remaining_items)
+            member.assign_items(items_to_assign, task)
+            remaining_items -= items_to_assign
+            bots_assigned += 1
+            
+            self.get_logger().info(f"Task {task.id}: Assigned {items_to_assign} items to Bot {member.id}")
+            
+            # Send command to path planning
+            self.send_command_to_bot(member.id, task, items_to_assign)
+        
+        return bots_assigned > 0
+
+    def find_free_neighbor_cell(self, x: int, y: int) -> tuple:
+       
+        x, y = int(x), int(y)
+        neighbors = [(x, y-1), (x, y+1), (x-1, y), (x+1, y)]  # Up, Down, Left, Right
+        
+        for nx, ny in neighbors:
+            key = (nx, ny)
+            if key in self.map_dict and self.map_dict[key] == 0:
+                return (nx, ny)
+        
+        # If no free neighbor found in map_dict, return the first valid coordinate
+        # (in case map_dict is incomplete)
+        for nx, ny in neighbors:
+            if 0 <= nx < self.map_width and 0 <= ny < self.map_height:
+                return (nx, ny)
+        
+        # Fallback to original
+        return (x, y)
+
+  
+    def send_command_to_bot(self, bot_id, task, items_assigned=1):
+         """Send task info to path planning."""
+         msg = BotMove()
+         msg.bot_id = bot_id
+         # msg.task_id = task.id
+         # msg.pick_x = float(task.x)
+         # msg.pick_y = float(task.y)
+         # msg.place_x = float(task.drop_x)
+         # msg.place_y = float(task.drop_y)
+         msg.type="update"
+         msg.init_x=int(task.x)
+         msg.init_y=int(task.y)
+         # msg.final_x=int(task.drop_x)
+         # msg.final_y=int(task.drop_y)
+         drop_x, drop_y = self.find_free_neighbor_cell(int(task.drop_x), int(task.drop_y))
+         msg.final_x=int(drop_x)
+         msg.final_y=int(drop_y)
+         # Get bot's current position
+         bot = self.bot_objects.get(bot_id)
+         # if bot:
+         #     msg.bot_x = int(bot.coord[0])
+         #     msg.bot_y = int(bot.coord[1])
+         # else:
+         #     msg.bot_x = int(self.bot_dict.get(bot_id, (0, 0))[0])
+         #     msg.bot_y = int(self.bot_dict.get(bot_id, (0, 0))[1])
+       
+         self.task_pub_to_path.publish(msg)
+         self.get_logger().info(f"Published TaskInfoPath for Bot {bot_id} | Task {task.id} | Items: {items_assigned}")
+
     def task_callback(self, msg):
-        self.get_logger().info(f"Received task {msg.id} | Current leaders: {len(self.all_leaders)} | Registered bots: {len(self.bot_dict)}")
-        new_task = Task(msg.id, msg.x, msg.y, msg.x_drop, msg.y_drop)
-        self.assign_best_robot(new_task)
+        """Handle incoming task from GUI."""
+        self.get_logger().info(f"Received task {msg.id} | Item qty: {msg.item_qty} | Current leaders: {len(self.all_leaders)}")
+        new_task = Task(msg.id, msg.x, msg.y, msg.x_drop, msg.y_drop, msg.item_qty)
+        self.assign_task(new_task)
 
 
 

@@ -1,3 +1,16 @@
+
+"""
+Task GUI Node - A standalone ROS2 node with a Tkinter GUI for publishing tasks.
+
+This node:
+- Subscribes to 'shelf_info' topic to get items and their drop-off locations
+- Subscribes to 'send_map' topic to validate pickup locations (status 0 = valid)
+- Allows users to input item_id and pickup location
+- Publishes TaskInfo with pickup and drop-off locations
+
+Run with: ros2 run swarm_logic task_gui_node
+"""
+
 import rclpy
 from rclpy.node import Node
 from messages.msg import TaskInfo, Map
@@ -154,9 +167,9 @@ class TaskGuiApp:
         task_id_label = ttk.Label(main_frame, textvariable=self.task_id_var, font=("Helvetica", 10))
         task_id_label.grid(row=2, column=0, columnspan=2, pady=(0, 5))
         
-        # Available items display
+        # Available items display (with word wrap for long lists)
         self.items_var = tk.StringVar(value="Available Items: (waiting for shelf data...)")
-        items_label = ttk.Label(main_frame, textvariable=self.items_var, font=("Helvetica", 9))
+        items_label = ttk.Label(main_frame, textvariable=self.items_var, font=("Helvetica", 9), wraplength=350)
         items_label.grid(row=3, column=0, columnspan=2, pady=(0, 15))
         
         # Item ID
