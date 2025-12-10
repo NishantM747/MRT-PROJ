@@ -22,8 +22,8 @@ class publishpath(Node):
         self.timer = self.create_timer(1.0, self.check_and_publish_path)
 
     def task_callback(self, msg):
-        self.start = msg.path[0]
-        self.end = msg.path[1]
+        self.start = (msg.path[0][0], msg.path[0][1]) # Convert Coord objects to tuples
+        self.end = (msg.path[1][0], msg.path[1][1]) # Convert Coord objects to tuples
         self.id = msg.roverid
         self.publish_path()  # Directly call publish_path after receiving new coordinates
 
