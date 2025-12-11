@@ -160,7 +160,7 @@ class Swarm(Node):
 
 def main():
     rclpy.init(args=None)
-    swarm = Swarm(4)
+    swarm = Swarm(5)
     swarm.see()
     swarm.map.update_frontiers(0)
 
