@@ -25,9 +25,9 @@ class Swarm(Node):
             self.bots.append(new_bot)
         self.pastchosen_Frontiers = set()
         self.frontiercosts = [{} for _ in range(bot_count)]
-        self.sendbotinfo = self.create_publisher(Map,'bot_info',10)
-        self.sendshelves = self.create_publisher(Map,'shelf_info',10)
-        self.to_move = self.create_subscription(BotMove,'bot_move',self.updatetasks,10)
+        self.sendbotinfo = self.create_publisher(Map,'bot_info',100)
+        self.sendshelves = self.create_publisher(Map,'shelf_info',100)
+        self.to_move = self.create_subscription(BotMove,'bot_move',self.updatetasks,100)
         self.sentmap = []
     def loadmap(self):
         plt.clf()
@@ -213,7 +213,7 @@ def main():
                 swarm.bots[i].justmove(next_step)
                 if not swarm.bots[i].path2:
                     msg = Map()
-                    msg.status = swarm.bots[1].id
+                    msg.status = swarm.bots[i].id
                     msg.x = swarm.bots[i].coord[0]
                     msg.y = swarm.bots[i].coord[1]
                     swarm.sendbotinfo.publish(msg)
