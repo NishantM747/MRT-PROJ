@@ -55,7 +55,7 @@ class Swarm(Node):
             y2 = msg.final_y
             self.bots[i].path2 = self.pathplanner.nav(self.bots[i].coord,(x2,y2))
             self.bots[i].path1 = []
-            # self.get_logger().info(f"bot{i} going to {(x2,y2)}")
+            self.get_logger().info(f"bot{i} going to {(x2,y2)}")
             
     def send_bot_info(self):
         for i in range(self.bot_count):
