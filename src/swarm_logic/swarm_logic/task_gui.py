@@ -1,15 +1,4 @@
 
-"""
-Task GUI Node - A standalone ROS2 node with a Tkinter GUI for publishing tasks.
-
-This node:
-- Subscribes to 'shelf_info' topic to get items and their drop-off locations
-- Subscribes to 'send_map' topic to validate pickup locations (status 0 = valid)
-- Allows users to input item_id and pickup location
-- Publishes TaskInfo with pickup and drop-off locations
-
-Run with: ros2 run swarm_logic task_gui_node
-"""
 
 import rclpy
 from rclpy.node import Node
@@ -20,7 +9,7 @@ from tkinter import ttk, messagebox
 
 
 class TaskGuiNode(Node):
-    """ROS2 Node that publishes TaskInfo messages and tracks map/shelf data."""
+    
     
     def __init__(self):
         super().__init__('task_gui_node')
@@ -37,12 +26,12 @@ class TaskGuiNode(Node):
         
         # Subscribe to shelf info for items and drop-off locations
         self.shelf_sub = self.create_subscription(
-            Map, 'shelf_info', self.shelf_callback, 4000
+            Map, 'shelf_info', self.shelf_callback, 400
         )
         
         # Subscribe to map data for location validation
         self.map_sub = self.create_subscription(
-            Map, 'send_map', self.map_callback, 10
+            Map, 'send_map', self.map_callback, 1000
         )
         
         self.get_logger().info("Task GUI Node initialized")
@@ -58,20 +47,20 @@ class TaskGuiNode(Node):
         
         if item_id not in self.items:
             self.items[item_id] = (drop_x, drop_y)
-            # self.get_logger().info(f"Item {item_id} registered | Drop-off: ({drop_x}, {drop_y})")
+            self.get_logger().info(f"Item {item_id} registered | Drop-off: ({drop_x}, {drop_y})")
     
     def map_callback(self, msg: Map):
-        """Handle map data - updates location validity."""
+        
         x = msg.x
         y = msg.y
         status = msg.status
         
         # Update map (status 0 = valid/free)
         self.map_dict[(x, y)] = status
-        # self.get_logger().debug(f"Map update: ({x}, {y}) = {status}")
+        self.get_logger().debug(f"Map update: ({x}, {y}) = {status}")
     
     def is_location_valid(self, x: int, y: int) -> bool:
-        """Check if a pickup location is valid (status 0 = valid)."""
+        
         # If we have no map data yet, allow all locations
         if not self.map_dict:
             return True
@@ -85,16 +74,15 @@ class TaskGuiNode(Node):
         return True
     
     def get_drop_location(self, item_id: int) -> tuple:
-        """Get drop-off location for an item. Returns None if not found."""
+        
         return self.items.get(item_id)
     
     def get_available_items(self) -> list:
-        """Get list of available item IDs."""
         return list(self.items.keys())
     
     def publish_task(self, pickup_x: float, pickup_y: float, 
                      dropoff_x: float, dropoff_y: float, item_id: int, item_qty: int = 1) -> int:
-        """Publish a task with pickup and drop-off locations."""
+      
         msg = TaskInfo()
         msg.id = self.task_id_counter
         msg.item_id = item_id
@@ -121,8 +109,7 @@ class TaskGuiNode(Node):
 
 
 class TaskGuiApp:
-    """Tkinter GUI Application for task publishing."""
-    
+   
     def __init__(self, ros_node: TaskGuiNode):
         self.ros_node = ros_node
         self.map_width = 60
@@ -204,13 +191,37 @@ class TaskGuiApp:
         self.y_entry.grid(row=7, column=1, sticky="w", pady=5)
         self.y_entry.insert(0, "30")
         
+        # Docking Area Mode Checkbox
+        self.docking_mode = tk.BooleanVar(value=False)
+        self.docking_checkbox = ttk.Checkbutton(
+            main_frame, 
+            text="Use Docking Area", 
+            variable=self.docking_mode,
+            command=self._toggle_docking_mode
+        )
+        self.docking_checkbox.grid(row=8, column=0, columnspan=2, pady=5)
+        
+        # Docking area info
+        self.docking_info = ttk.Label(
+            main_frame, 
+            text="Docking Area: (28-32, 2)", 
+            font=("Helvetica", 9), 
+            foreground="gray"
+        )
+        self.docking_info.grid(row=9, column=0, columnspan=2, pady=(0, 5))
+        self.docking_info.grid_remove()  # Hidden by default
+        
+        # Predefined docking area coordinates (top center, 5x1 strip)
+        self.docking_area = [(28, 2), (29, 2), (30, 2), (31, 2), (32, 2)]
+        self.docking_index = 0  # Cycles through docking spots
+        
         # Drop-off display (read-only, determined by item)
         drop_label = ttk.Label(main_frame, text="Drop-off:", font=("Helvetica", 11))
-        drop_label.grid(row=8, column=0, sticky="e", padx=(0, 10), pady=5)
+        drop_label.grid(row=10, column=0, sticky="e", padx=(0, 10), pady=5)
         
         self.drop_var = tk.StringVar(value="(select item)")
         drop_display = ttk.Label(main_frame, textvariable=self.drop_var, font=("Helvetica", 11))
-        drop_display.grid(row=8, column=1, sticky="w", pady=5)
+        drop_display.grid(row=10, column=1, sticky="w", pady=5)
         
         # Update drop-off when item entry changes
         self.item_entry.bind('<KeyRelease>', self._update_dropoff_display)
@@ -221,7 +232,7 @@ class TaskGuiApp:
             text="Publish Task", 
             command=self._publish_task
         )
-        self.publish_btn.grid(row=9, column=0, columnspan=2, pady=20)
+        self.publish_btn.grid(row=11, column=0, columnspan=2, pady=20)
         
         # Status display
         self.status_var = tk.StringVar(value="Ready to publish tasks")
@@ -231,7 +242,7 @@ class TaskGuiApp:
             font=("Helvetica", 10),
             foreground="green"
         )
-        self.status_label.grid(row=10, column=0, columnspan=2, pady=(10, 0))
+        self.status_label.grid(row=12, column=0, columnspan=2, pady=(10, 0))
         
         # Bind Enter key to publish
         self.root.bind('<Return>', lambda e: self._publish_task())
@@ -239,8 +250,35 @@ class TaskGuiApp:
         # Start periodic update for available items display
         self._update_items_display()
     
+    def _toggle_docking_mode(self):
+       
+        if self.docking_mode.get():
+            # Enable docking mode - disable pickup entries, show info
+            self.x_entry.config(state='disabled')
+            self.y_entry.config(state='disabled')
+            self.x_entry.delete(0, tk.END)
+            self.x_entry.insert(0, "Docking")
+            self.y_entry.delete(0, tk.END)
+            self.y_entry.insert(0, "Area")
+            self.docking_info.grid()  # Show docking info
+        else:
+            # Disable docking mode - re-enable pickup entries
+            self.x_entry.config(state='normal')
+            self.y_entry.config(state='normal')
+            self.x_entry.delete(0, tk.END)
+            self.x_entry.insert(0, "30")
+            self.y_entry.delete(0, tk.END)
+            self.y_entry.insert(0, "30")
+            self.docking_info.grid_remove()  # Hide docking info
+    
+    def _get_next_docking_spot(self):
+       
+        spot = self.docking_area[self.docking_index]
+        self.docking_index = (self.docking_index + 1) % len(self.docking_area)
+        return spot
+    
     def _update_items_display(self):
-        """Periodically update the available items display."""
+     
         items = self.ros_node.get_available_items()
         if items:
             self.items_var.set(f"Available Items: {sorted(items)}")
@@ -251,7 +289,6 @@ class TaskGuiApp:
         self.root.after(1000, self._update_items_display)
     
     def _update_dropoff_display(self, event=None):
-        """Update the drop-off location display based on selected item."""
         try:
             item_id = int(self.item_entry.get())
             drop_loc = self.ros_node.get_drop_location(item_id)
@@ -263,9 +300,6 @@ class TaskGuiApp:
             self.drop_var.set("(invalid item)")
     
     def _validate_input(self) -> tuple:
-        """Validate and parse input values."""
-        x_str = self.x_entry.get()
-        y_str = self.y_entry.get()
         item_str = self.item_entry.get()
         
         # Parse item ID
@@ -283,12 +317,19 @@ class TaskGuiApp:
             else:
                 raise ValueError("No items available yet. Waiting for shelf data...")
         
-        # Parse coordinates
-        try:
-            x = int(float(x_str))
-            y = int(float(y_str))
-        except ValueError:
-            raise ValueError("X and Y must be valid numbers")
+        # Get pickup coordinates - either from docking area or manual input
+        if self.docking_mode.get():
+            # Use predefined docking area
+            x, y = self._get_next_docking_spot()
+        else:
+            # Parse coordinates from entries
+            x_str = self.x_entry.get()
+            y_str = self.y_entry.get()
+            try:
+                x = int(float(x_str))
+                y = int(float(y_str))
+            except ValueError:
+                raise ValueError("X and Y must be valid numbers")
         
         # Check bounds
         if not (0 <= x <= self.map_width):
@@ -311,7 +352,6 @@ class TaskGuiApp:
         return x, y, item_id, drop_loc, qty
     
     def _publish_task(self):
-        """Handle publish button click."""
         try:
             pickup_x, pickup_y, item_id, drop_loc, qty = self._validate_input()
             dropoff_x, dropoff_y = drop_loc
@@ -335,11 +375,9 @@ class TaskGuiApp:
             self.status_label.config(foreground="red")
     
     def _on_closing(self):
-        """Handle window close event."""
         self.root.destroy()
     
     def run(self):
-        """Start the GUI main loop."""
         self.root.mainloop()
 
 
@@ -377,7 +415,6 @@ class TaskGuiApp:
 
 
 def main(args=None):
-    """Main entry point for the task GUI node."""
     # Initialize ROS2
     rclpy.init(args=args)
     

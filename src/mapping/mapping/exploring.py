@@ -25,10 +25,10 @@ class Swarm(Node):
             self.bots.append(new_bot)
         self.pastchosen_Frontiers = set()
         self.frontiercosts = [{} for _ in range(bot_count)]
-        self.sendbotinfo = self.create_publisher(Map,'bot_info',10)
-        self.sendbot_task_info = self.create_publisher(Map,'bot_task_info',100)
-        self.sendshelves = self.create_publisher(Map,'shelf_info',10)
-        self.to_move = self.create_subscription(BotMove,'bot_move',self.updatetasks,100)
+        self.sendbotinfo = self.create_publisher(Map,'bot_info',100)
+        self.sendbot_task_info = self.create_publisher(Map,'bot_task_info',1000)
+        self.sendshelves = self.create_publisher(Map,'shelf_info',100)
+        self.to_move = self.create_subscription(BotMove,'bot_move',self.updatetasks,1000)
         self.sentmap = []
     def loadmap(self):
         plt.clf()
