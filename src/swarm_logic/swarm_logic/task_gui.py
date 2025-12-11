@@ -34,13 +34,19 @@ class TaskGuiNode(Node):
             Map, 'send_map', self.map_callback, 1000
         )
         
+        # Subscribe to bot position updates (uses same callback)
+        self.bot_pos_sub = self.create_subscription(
+            Map, 'bot_pos_update', self.map_callback, 100
+        )
+        
         self.get_logger().info("Task GUI Node initialized")
         self.get_logger().info("Subscribing to 'shelf_info' for items/drop-offs")
         self.get_logger().info("Subscribing to 'send_map' for location validation")
+        self.get_logger().info("Subscribing to 'bot_pos_update' for bot positions")
         self.get_logger().info("Publishing to 'new_tasks'")
     
     def shelf_callback(self, msg: Map):
-        """Handle shelf info - creates item with drop-off location."""
+        
         item_id = msg.status  # status field holds the item_id
         drop_x = msg.x
         drop_y = msg.y
@@ -60,18 +66,18 @@ class TaskGuiNode(Node):
         self.get_logger().debug(f"Map update: ({x}, {y}) = {status}")
     
     def is_location_valid(self, x: int, y: int) -> bool:
-        
-        # If we have no map data yet, allow all locations
+      
+        # If we have no map data yet, allow all locations (exploration not done)
         if not self.map_dict:
-            return True
+            return False
         
         # Check if location exists in map and has status 0 (valid)
         key = (int(x), int(y))
         if key in self.map_dict:
             return self.map_dict[key] == 0
         
-        # Location not in map - assume valid (could be unexplored)
-        return True
+        # Location not in map - assume blocked (unexplored = unsafe)
+        return False
     
     def get_drop_location(self, item_id: int) -> tuple:
         

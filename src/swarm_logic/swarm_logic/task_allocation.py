@@ -102,6 +102,7 @@ class TaskAllocator(Node):
         self.active_branches = {}  # branch_id branch object
         self.current_tasks = {}  # bot_id task_id (bots currently assigned to tasks)
         self.pending_movements = {}  # bot_id target (x, y) for initial movement tracking
+        self.bot_to_leader_movements = {}  # bot_id -> target (x, y) for return-to-leader movement
         self.branches_ready = False  # Flag: True after all bots have successfully moved to regions
         
         # Map data for location validation (combined from MapProxy)
@@ -119,6 +120,9 @@ class TaskAllocator(Node):
         self.task_pub_to_path=self.create_publisher(BotMove, 'bot_move', 100)
        
         self.bot_move_pub = self.create_publisher(BotMove, 'bot_move', 100)
+        
+        # Publisher for bot position updates (status 2 = bot location)
+        self.bot_pos_pub = self.create_publisher(Map, 'bot_pos_update', 100)
         
         self.get_logger().info("Task allocator initialised. Waiting for bot registration...")
 
@@ -192,11 +196,12 @@ class TaskAllocator(Node):
             if bot_id in self.bot_objects:
                 self.bot_objects[bot_id].coord = (new_x, new_y)
             self.bot_dict[bot_id] = (new_x, new_y)
+            self._publish_bot_position(new_x, new_y)
             
             # Check if all bots have completed initial movement
             if len(self.pending_movements) == 0 and not self.branches_ready:
                 self.branches_ready = True
-                self.get_logger().info("=== ALL BOTS REACHED THEIR POSITIONS - READY FOR TASKS ===")
+                self.get_logger().info(" ALL BOTS REACHED THEIR POSITIONS - READY FOR TASKS ")
             else:
                 self.get_logger().info(f"Waiting for {len(self.pending_movements)} more bots: {list(self.pending_movements.keys())}")
             return
@@ -215,12 +220,12 @@ class TaskAllocator(Node):
                 self.get_logger().warn(f"Bot {bot_id} not found in bot_objects!")
                 return
             
-            # Reset bot capacity (make it free for new tasks)
-            bot.complete_task()
+            # DON'T reset capacity yet - wait until bot returns to leader
             
             # Update bot's position
             bot.coord = (new_x, new_y)
             self.bot_dict[bot_id] = (new_x, new_y)
+            self._publish_bot_position(new_x, new_y)
             
             # Find nearest leader and reassign bot to that leader's team
             if not bot.is_leader:  # Only reassign members, not leaders
@@ -233,8 +238,39 @@ class TaskAllocator(Node):
                     
                     nearest_leader.members.append(bot)
                     self.get_logger().info(f"Bot {bot_id} reassigned to Leader {nearest_leader.id}'s team")
+                
+                # Send bot back to leader's position to clear docking area
+                current_leader = nearest_leader if nearest_leader else old_leader
+                if current_leader:
+                    leader_pos = current_leader.coord
+                    target_pos = self.find_free_location_near(leader_pos[0], leader_pos[1])
+                    self._publish_bot_move(bot_id, (new_x, new_y), target_pos)
+                    self.bot_to_leader_movements[bot_id] = target_pos
+                    self.get_logger().info(f"Bot {bot_id} returning to Leader {current_leader.id} at {target_pos}")
             
-            self.get_logger().info(f"Bot {bot_id} is now FREE and ready for new tasks")
+            self.get_logger().info(f"Bot {bot_id} task done, returning to leader...")
+            return
+        
+        # Return-to-leader movement tracking
+        if bot_id in self.bot_to_leader_movements:
+            target = self.bot_to_leader_movements[bot_id]
+            target_x, target_y = target
+            
+            distance = abs(new_x - target_x) + abs(new_y - target_y)
+            if distance > 5:
+                self.get_logger().debug(f"Bot {bot_id} at ({new_x}, {new_y}) - ignoring, too far from leader target {target}")
+                return
+            
+            self.bot_to_leader_movements.pop(bot_id)
+            self.get_logger().info(f"Bot {bot_id} arrived near leader at ({new_x}, {new_y})")
+            
+            if bot_id in self.bot_objects:
+                self.bot_objects[bot_id].coord = (new_x, new_y)
+                # NOW reset capacity - bot is back near leader and ready
+                self.bot_objects[bot_id].complete_task()
+                self.get_logger().info(f"Bot {bot_id} is now FREE and ready for new tasks")
+            self.bot_dict[bot_id] = (new_x, new_y)
+            self._publish_bot_position(new_x, new_y)
             return
         
         # Just a position update (not initial movement or task completion)
@@ -242,6 +278,7 @@ class TaskAllocator(Node):
         if bot_id in self.bot_objects:
             self.bot_objects[bot_id].coord = (new_x, new_y)
             self.bot_dict[bot_id] = (new_x, new_y)
+            self._publish_bot_position(new_x, new_y)
 
     def _get_current_leader_of_bot(self, bot):
         
@@ -250,14 +287,23 @@ class TaskAllocator(Node):
                 return leader
         return None
 
+    def _publish_bot_position(self, x, y):
+        
+        msg = Map()
+        msg.x = int(x)
+        msg.y = int(y)
+        msg.status = 2  # Bot status
+        self.bot_pos_pub.publish(msg)
+        self.map_dict[(int(x), int(y))] = 2  # Also update local map_dict
+        self.get_logger().debug(f"Published bot position: ({x}, {y}) status=2")
 
     def is_location_free(self, x: int, y: int) -> bool:
-       
+     
         key = (int(x), int(y))
         if key in self.map_dict:
             return self.map_dict[key] == 0
-        # If not in map, assume free (unexplored)
-        return True
+        # If not in map, assume blocked (unexplored = unsafe)
+        return False
 
     def find_free_location_near(self, target_x: int, target_y: int) -> tuple:
    
@@ -547,22 +593,17 @@ class TaskAllocator(Node):
         return bots_assigned > 0
 
     def find_free_neighbor_cell(self, x: int, y: int) -> tuple:
-        
+        """Find a free neighboring cell (status 0) around the given position."""
         x, y = int(x), int(y)
         neighbors = [(x, y-1), (x, y+1), (x-1, y), (x+1, y)]  # Up, Down, Left, Right
         
         for nx, ny in neighbors:
-            key = (nx, ny)
-            if key in self.map_dict and self.map_dict[key] == 0:
-                return (nx, ny)
-        
-        # If no free neighbor found in map_dict, return the first valid coordinate
-        # (in case map_dict is incomplete)
-        for nx, ny in neighbors:
             if 0 <= nx < self.map_width and 0 <= ny < self.map_height:
-                return (nx, ny)
+                if self.is_location_free(nx, ny):
+                    return (nx, ny)
         
-        # Fallback to original
+        # No free neighbor found - return original (caller should handle)
+        self.get_logger().warn(f"No free neighbor found for ({x}, {y})")
         return (x, y)
 
   
