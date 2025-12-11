@@ -26,8 +26,9 @@ class Swarm(Node):
         self.pastchosen_Frontiers = set()
         self.frontiercosts = [{} for _ in range(bot_count)]
         self.sendbotinfo = self.create_publisher(Map,'bot_info',100)
+        self.sendbot_task_info = self.create_publisher(Map,'bot_task_info',1000)
         self.sendshelves = self.create_publisher(Map,'shelf_info',100)
-        self.to_move = self.create_subscription(BotMove,'bot_move',self.updatetasks,100)
+        self.to_move = self.create_subscription(BotMove,'bot_move',self.updatetasks,1000)
         self.sentmap = []
     def loadmap(self):
         plt.clf()
@@ -54,7 +55,7 @@ class Swarm(Node):
             y2 = msg.final_y
             self.bots[i].path2 = self.pathplanner.nav(self.bots[i].coord,(x2,y2))
             self.bots[i].path1 = []
-            self.get_logger().info(f"bot{i} going to {(x2,y2)}")
+            self.get_logger().info(f"bot{i} going to {(x2,y2)} status of target : {self.map.grid[(x2,y2)]}")
             
     def send_bot_info(self):
         for i in range(self.bot_count):
@@ -62,6 +63,7 @@ class Swarm(Node):
             msg.x = self.bots[i].coord[0]
             msg.y = self.bots[i].coord[1]
             msg.status = self.bots[i].id
+            self.get_logger().info(f"published bot {msg.status}")
             self.sendbotinfo.publish(msg)
         msg=Map()
         msg.x=0
@@ -158,7 +160,7 @@ class Swarm(Node):
 
 def main():
     rclpy.init(args=None)
-    swarm = Swarm(10)
+    swarm = Swarm(5)
     swarm.see()
     swarm.map.update_frontiers(0)
 
@@ -216,12 +218,13 @@ def main():
                     msg.status = swarm.bots[i].id
                     msg.x = swarm.bots[i].coord[0]
                     msg.y = swarm.bots[i].coord[1]
-                    swarm.sendbotinfo.publish(msg)
-        for x in range(swarm.bot_count):
-            swarm.map.grid[swarm.bots[x].coord] = 2
-        swarm.update_data()
-        swarm.loadmap()
-    
+                    swarm.sendbot_task_info.publish(msg)
+                    print(f"info about bot {msg.status} sent")
+            for x in range(swarm.bot_count):
+                swarm.map.grid[swarm.bots[x].coord] = 2
+                swarm.update_data()
+                swarm.loadmap()
+                    
 
 if __name__ == '__main__':
     main()
